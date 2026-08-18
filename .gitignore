@@ -1,0 +1,5 @@
+.vscode/*
+.nextflow*
+.nextflow/*
+SH*/*
+testout

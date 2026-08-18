@@ -62,7 +62,11 @@ def load_primer_map(path):
         # Normalize column names in case of stray whitespace
         reader.fieldnames = [c.strip() for c in reader.fieldnames]
         for row in reader:
-            primer = row.get("Primer_name", "").strip()
+            # TODO: The .strip() that occurs in the fieldnames grab does not remove the \ufeff
+            # Byte Order Mark, which only appears at the start of the document? So I set it
+            # here as hardcoded in, which ain't the best idea. Not to mention the headers are
+            # hardcoded in, which is also suboptimal.
+            primer = row.get("\ufeffPrimer_name", "").strip()
             if not primer:
                 continue
             plate_raw = row.get("Plate", "")
