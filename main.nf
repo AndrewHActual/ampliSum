@@ -9,6 +9,7 @@ params.data_dir   = null                 // top-level directory containing per-s
 params.primer_map = null                 // path to primerplatepoolmapping.csv
 params.outdir     = "results"
 params.fasta_suffix = ".final.unique.fasta"
+params.hist_bins  = 30                   // number of histogram bins for the copies plot
 
 if (params.data_dir == null) {
     exit 1, "ERROR: Please provide --data_dir pointing to the top-level amplicon data directory"
@@ -44,6 +45,9 @@ workflow {
 
     // Collect all per-sample TSVs and merge into one master TSV
     MERGE_SUMMARIES(PARSE_SAMPLE.out.summary_tsv.collect())
+
+    // Generate a stacked histogram of copies vs pool_match from the merged TSV
+    PLOT_HISTOGRAM(MERGE_SUMMARIES.out)
 }
 
 /*
@@ -87,5 +91,29 @@ process MERGE_SUMMARIES {
     script:
     """
     combine_summaries.py --output all_samples.summary.tsv ${tsv_files}
+    """
+}
+
+/*
+ * Process: generate a stacked histogram of 'copies' values, split by
+ * pool_match (TRUE vs FALSE), from the merged master summary TSV.
+ */
+process PLOT_HISTOGRAM {
+    publishDir "${params.outdir}", mode: 'copy'
+
+    input:
+    path summary_tsv
+
+    output:
+    path "copies_histogram.png"
+    path "copies_histogram_log.png"
+
+    script:
+    """
+    plot_histogram.py \\
+        --input ${summary_tsv} \\
+        --output-linear copies_histogram.png \\
+        --output-log copies_histogram_log.png \\
+        --bins ${params.hist_bins}
     """
 }

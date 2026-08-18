@@ -1,4 +1,4 @@
-# Amplicon Header Summary Pipeline
+# Hot Amplicon Summary
 
 A Nextflow pipeline (with Python-based processing) that scans per-sample amplicon FASTA files, parses their headers, and cross-references primer/pool assignments against a plate/pool mapping file to flag matches and mismatches.
 
@@ -12,6 +12,7 @@ Given a top-level data directory containing one subdirectory per sample, this pi
 4. Splits the sample name into its component parts (sample ID, replicate, pool number, sample number).
 5. Looks up each primer in a primer→plate→pool mapping file and checks whether the mapped pool matches the pool number encoded in the sample name.
 6. Writes a per-sample summary TSV, then merges all per-sample TSVs into one master TSV.
+7. Generates a stacked histogram (linear and log-scale versions) of `copies` values, split by `pool_match` (True vs False).
 
 ## Repository Structure
 
@@ -21,7 +22,8 @@ Given a top-level data directory containing one subdirectory per sample, this pi
 ├── nextflow.config
 ├── bin/
 │   ├── parse_fasta_headers.py
-│   └── combine_summaries.py
+│   ├── combine_summaries.py
+│   └── plot_histogram.py
 └── README.md
 ```
 
@@ -31,7 +33,7 @@ Nextflow automatically adds `bin/` to `PATH` for every process, so the Python sc
 
 - [Nextflow](https://www.nextflow.io/) (DSL2, tested with `nextflow.enable.dsl=2`)
 - Python 3.7+
-- No third-party Python packages required (uses only the standard library: `csv`, `argparse`, `glob`, `os`, `sys`)
+- `matplotlib` and `numpy` (only required for the histogram-plotting step; the parsing/merging steps use only the Python standard library)
 
 ## Input Requirements
 
@@ -95,6 +97,7 @@ nextflow run main.nf \
 | `--primer_map`  | Yes      | —                          | Path to `primerplatepoolmapping.csv`              |
 | `--outdir`      | No       | `results`                  | Output directory                                  |
 | `--fasta_suffix`| No       | `.final.unique.fasta`      | Suffix used to identify relevant FASTA files       |
+| `--hist_bins`   | No       | `30`                       | Number of bins used in the copies histogram        |
 
 ### Outputs
 
@@ -105,6 +108,8 @@ results/
 │   ├── <sample2>.summary.tsv
 │   └── ...
 ├── all_samples.summary.tsv
+├── copies_histogram.png
+├── copies_histogram_log.png
 ├── pipeline_trace.txt
 └── pipeline_report.html
 ```
@@ -158,6 +163,18 @@ Given a header like:
 
 All per-sample TSVs (identical column structure) are concatenated into a single `all_samples.summary.tsv`, with a warning emitted if any file's header columns don't match the expected set.
 
+### Histogram plotting (`plot_histogram.py`)
+
+1. Reads `all_samples.summary.tsv` and coerces `copies` to a float and `pool_match` to a proper boolean (accepts `"True"`/`"False"` strings, case-insensitive).
+2. Splits rows into two groups based on `pool_match`.
+3. Builds a shared set of bin edges across both groups (so the histograms are directly comparable) and renders a **stacked** bar histogram — `pool_match = True` in green, `pool_match = False` in red/pink.
+4. Produces two output images:
+   - `copies_histogram.png` — linear x-axis
+   - `copies_histogram_log.png` — log10 x-axis, with values floored at 1 to avoid `log(0)` errors
+5. Rows with missing or non-numeric `copies`, or an unparseable `pool_match`, are skipped with a warning written to stderr.
+
+The log-scale version is generally the more informative plot for amplicon copy-count data, which tends to be heavily right-skewed (as seen in the example FASTA, where `size=` values range from single digits into the hundreds).
+
 ## Notes / Assumptions
 
 - **Directory depth:** Only first-level subdirectories of `--data_dir` are treated as samples. Nested/deeper directories are ignored.
@@ -166,7 +183,8 @@ All per-sample TSVs (identical column structure) are concatenated into a single 
 - **Sample name structure:** Sample names are assumed to follow the 4-field `_`-delimited pattern seen in the example (`sample_id_replicate_pool_samplenum`, e.g. `2011K-0837_Rep1_5_S21`). If a sample name has fewer than 4 fields, missing fields are left blank in the output rather than causing an error. Extra fields beyond the 4th are currently ignored.
 - **Pool number typing:** `pool_number` (from the header) and `Pool` (from the mapping CSV) are both cast to `int` before comparison. `Plate` is cast to `float` per the documented schema. Values like `5.0` in the `Pool` column are handled by casting through `float` first, then `int`.
 - **Unmapped primers:** If a `Primer_name` parsed from a FASTA header does not exist in `primerplatepoolmapping.csv`, `pool_match` defaults to `False` (not `NA`), and a warning is logged to stderr. If you'd prefer these rows to be flagged differently (e.g., `NA`/blank) or excluded entirely, update the corresponding logic block in `bin/parse_fasta_headers.py`.
-- **No external Python dependencies:** All scripts rely solely on the Python standard library, so no `requirements.txt` or container build is strictly necessary. A `container` directive placeholder is included (commented out) in `nextflow.config` for environments that require containerized execution.
+- **No external Python dependencies for parsing/merging:** `parse_fasta_headers.py` and `combine_summaries.py` rely solely on the Python standard library. `plot_histogram.py` requires `matplotlib` and `numpy` — ensure these are installed in whatever environment/container runs the `PLOT_HISTOGRAM` process. A `container` directive placeholder is included (commented out) in `nextflow.config` for environments that require containerized execution.
+- **Histogram binning:** Bin edges are shared between the TRUE and FALSE groups (computed from the combined value range) so that the stacked bars line up correctly. The log-scale plot floors values at 1 before taking `log10` to avoid errors on zero or negative `copies` values, which should not occur in practice but are handled defensively.
 - **Idempotency/re-runs:** Each Nextflow process publishes outputs via `publishDir` with `mode: 'copy'`; re-running the pipeline will overwrite prior outputs in `--outdir`.
 - **Malformed headers:** Any header line that doesn't match the expected `=`/`;` structure is skipped, with a warning written to stderr rather than halting the pipeline.
 
