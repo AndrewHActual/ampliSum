@@ -106,10 +106,12 @@ def plot_stacked_histogram(true_vals, false_vals, bins, output_path, log_scale=F
     if log_scale:
         ax.set_xscale("log")
         ax.set_xlabel("Copies (log scale)")
+        ax.set_yscale("log")
+        ax.set_ylabel("Count (log scale)")
     else:
         ax.set_xlabel("Copies")
-
-    ax.set_ylabel("Count")
+        ax.set_ylabel("Count")
+        
     ax.set_title(f"Distribution of Copies by pool_match{title_suffix}")
     ax.legend(frameon=False)
     ax.spines["top"].set_visible(False)

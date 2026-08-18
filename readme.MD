@@ -169,11 +169,11 @@ All per-sample TSVs (identical column structure) are concatenated into a single 
 2. Splits rows into two groups based on `pool_match`.
 3. Builds a shared set of bin edges across both groups (so the histograms are directly comparable) and renders a **stacked** bar histogram — `pool_match = True` in green, `pool_match = False` in red/pink.
 4. Produces two output images:
-   - `copies_histogram.png` — linear x-axis
-   - `copies_histogram_log.png` — log10 x-axis, with values floored at 1 to avoid `log(0)` errors
+   - `copies_histogram.png` — linear x-axis, linear y-axis
+   - `copies_histogram_log.png` — log10 x-axis **and** log10 y-axis, with `copies` values floored at 1 to avoid `log(0)` errors on the x-axis
 5. Rows with missing or non-numeric `copies`, or an unparseable `pool_match`, are skipped with a warning written to stderr.
 
-The log-scale version is generally the more informative plot for amplicon copy-count data, which tends to be heavily right-skewed (as seen in the example FASTA, where `size=` values range from single digits into the hundreds).
+The log-scale version is generally the more informative plot for amplicon copy-count data, which tends to be heavily right-skewed (as seen in the example FASTA, where `size=` values range from single digits into the hundreds). Note that on a log y-axis, bins with a count of exactly 0 will not render a visible bar (log(0) is undefined), which is expected matplotlib behavior rather than a bug.
 
 ## Notes / Assumptions
 
